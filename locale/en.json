@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Qianwen AI platform",
+    "description": "Brings platform.qianwenai.com into DSH: Token Plan and pay-as-you-go provider routes, a model catalog with credits multipliers, remaining credits read through the official CLI with in-plugin sign-in, and thinking-mode switch and levels.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "千问 AI 平台",
+    "description": "把 platform.qianwenai.com 接入 DSH：Token Plan 与按量付费双通道 provider、内置模型目录与 Credits 单价倍率、经官方 CLI 读取剩余额度并在插件内完成登录、思考模式开关与档位。",
+    "detail": "docs/DETAIL.md"
+  }
+}

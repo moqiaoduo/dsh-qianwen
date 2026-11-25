@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "title": { "en": "Moqiao's plugins", "zh": "莫云的插件" },
+  "description": {
+    "en": "Self-hosted DSH plugin bundles.",
+    "zh": "自建 DSH 插件索引。"
+  },
+  "plugins": [
+    {
+      "name": "dsh-qianwen",
+      "title": { "en": "Qianwen AI platform", "zh": "千问 AI 平台" },
+      "description": {
+        "en": "Brings platform.qianwenai.com into DSH: Token Plan and pay-as-you-go providers, model catalog with credits multipliers, credits query, and thinking controls.",
+        "zh": "把 platform.qianwenai.com 接入 DSH：Token Plan 与按量付费双通道、模型目录与 Credits 单价、剩余额度与思考模式控制。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI5LjQiIHN0cm9rZT0iIzRkOGRmNyIgc3Ryb2tlLXdpZHRoPSIxLjciIG9wYWNpdHk9IjAuNzUiLz4KICA8cGF0aCBkPSJNMTIgNC44Yy0yLjcgMi40LTQuMyA0LjgtNC4zIDcuMiAwIDIuNSAxLjkgNC41IDQuMyA0LjVzNC4zLTIgNC4zLTQuNWMwLTIuNC0xLjYtNC44LTQuMy03LjJaIiBzdHJva2U9IiM0ZDhkZjciIHN0cm9rZS13aWR0aD0iMS43IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTEyIDEyLjZ2Ni42IiBzdHJva2U9IiM0ZDhkZjciIHN0cm9rZS13aWR0aD0iMS43IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+Cg==",
+      "author": "Moqiao",
+      "metadata": {
+        "keywords": ["qianwen", "tongyi", "provider", "llm", "credits"]
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1795527863,
+          "source": { "type": "npm" },
+          "engines": { "dsh": ">=0.2.2-rc.5" }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "dsh-qianwen",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Qianwen AI platform (platform.qianwenai.com) provider, model catalog, credits multiplier, quota and thinking controls for DeepSeek Harness",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moqiaoduo/dsh-qianwen.git"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}
