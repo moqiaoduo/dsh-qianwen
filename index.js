@@ -178,12 +178,13 @@ function json(res, status, body) {
 }
 
 /**
- * Only the local browser may drive this table.
+ * Fallback guard for profiles that do not mount the host Connection service.
  *
  * The routes carry plan credits and can store API keys, so a page on another
- * origin must not reach them through a DNS-rebinding trick. The web server
- * binds loopback, and every request is additionally required to come from a
- * loopback socket.
+ * origin must not reach them. The preferred check is the host's
+ * `connection.requestRejection`, which also defends DNS rebinding and cross-site
+ * requests; a bare loopback socket check cannot tell those apart. This remains
+ * only as a last resort when no Connection service is available.
  */
 function requireLoopback(req, res) {
   const address = req.socket?.remoteAddress ?? ''
@@ -193,6 +194,17 @@ function requireLoopback(req, res) {
     return false
   }
   return true
+}
+
+/** Host Connection service, or undefined on profiles that do not mount one. */
+function connectionOf(ctx) {
+  try {
+    // Hosts expose it either as a direct ctx property or as a cordis service.
+    const connection = Reflect.get(ctx, 'connection') ?? ctx.get?.('connection')
+    return connection && typeof connection.requestRejection === 'function' ? connection : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function readBody(req, limit = 256 * 1024) {
@@ -1111,7 +1123,14 @@ export function apply(ctx, config) {
             json(res, 405, { error: `use ${route.method}` })
             return
           }
-          if (!requireLoopback(req, res)) return
+          const connection = connectionOf(ctx)
+          if (connection) {
+            const rejection = connection.requestRejection(req)
+            if (rejection !== undefined) {
+              json(res, rejection, { error: rejection === 401 ? 'unauthorized' : 'forbidden' })
+              return
+            }
+          } else if (!requireLoopback(req, res)) return
           try {
             const body = route.method === 'POST' ? await readBody(req) : {}
             const result = await route.handler(req, res, body)
