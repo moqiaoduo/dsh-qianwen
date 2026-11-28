@@ -99,6 +99,11 @@ window.__ModuleLoader__.load({
       'quota.failed': '读取失败',
       'quota.expired': '登录已过期',
       'quota.renew': '去续期',
+      'quota.renewOpening': '正在获取授权链接…',
+      'quota.renewOpened': '授权页已打开；完成后点「完成登录」。',
+      'quota.openAuth': '重新打开授权页',
+      'quota.completeLogin': '完成登录',
+      'quota.renewFailed': '无法发起登录',
       'quota.expiredNote': '登录已过期：这里看不到额度与目录，模型调用不受影响。',
       'quota.updatedAt': '更新于 {time}',
       'quota.settingsHint': '完整视图在「设置 → 千问」。',
@@ -259,6 +264,11 @@ window.__ModuleLoader__.load({
       'quota.failed': 'Read failed',
       'quota.expired': 'Sign-in expired',
       'quota.renew': 'Renew',
+      'quota.renewOpening': 'Requesting the authorization link…',
+      'quota.renewOpened': 'Authorization page opened; click "Finish sign-in" when done.',
+      'quota.openAuth': 'Reopen authorization page',
+      'quota.completeLogin': 'Finish sign-in',
+      'quota.renewFailed': 'Could not start sign-in',
       'quota.expiredNote': 'Sign-in expired: quotas and catalog are stale. Model calls keep working.',
       'quota.updatedAt': 'Updated {time}',
       'quota.settingsHint': 'Full view under Settings → Qianwen.',
@@ -1975,7 +1985,7 @@ window.__ModuleLoader__.load({
        * 面板「嵌进侧栏」的原因）。两块分别渲染，用一个外部 store 共享开合与锚点。
        */
       function createPopoverStore() {
-        let snapshot = { open: false, anchor: undefined }
+        let snapshot = { open: false, anchor: undefined, renewToken: 0 }
         const listeners = new Set()
         const publish = (next) => {
           snapshot = next
@@ -1989,7 +1999,14 @@ window.__ModuleLoader__.load({
               listeners.delete(listener)
             }
           },
-          set: (open, anchor) => publish({ open, anchor: open === true ? anchor : undefined }),
+          // renewToken 只在「去续期」直接开面板时递增，面板据此自动发起登录；
+          // 普通点按钮开面板不动它，免得每次看额度都弹授权页。
+          set: (open, anchor, renew = false) =>
+            publish({
+              open,
+              anchor: open === true ? anchor : undefined,
+              renewToken: renew === true ? snapshot.renewToken + 1 : snapshot.renewToken,
+            }),
         }
       }
 
@@ -2002,7 +2019,7 @@ window.__ModuleLoader__.load({
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width }
       }
 
-      function QuotaPanel({ t, snapshot, onRefresh, busy, onClose, style, panelRef }) {
+      function QuotaPanel({ t, snapshot, onRefresh, busy, onClose, style, panelRef, login, renewBusy, renewError, onRenew, onComplete }) {
         const summary = snapshot?.summary
         const expired = summary?.authenticated === false
         const pct = typeof summary?.remainingPct === 'number' ? summary.remainingPct : 0
@@ -2030,20 +2047,48 @@ window.__ModuleLoader__.load({
                 'div',
                 null,
                 h('p', { className: 'qw-err', style: { margin: '4px 0' } }, t('quota.expiredNote')),
-                h(
-                  'a',
-                  {
-                    className: 'qw-quota-renew',
-                    href: '/settings/dsh-qianwen',
-                    onClick: (event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      const link = document.querySelector('a[href="/settings/dsh-qianwen"]')
-                      if (link instanceof HTMLAnchorElement) link.click()
-                    },
-                  },
-                  t('quota.renew'),
-                ),
+                // 续期就是重新走一遍 CLI 的设备登录：先向宿主发起 auth login，
+                // 拿到授权链接后新开一个标签页，用户授权完再回来点「完成登录」。
+                // 设置页里那套登录 UI 与此同源，但设置页不是 URL 路由（它是个
+                // modal），插件拿不到打开它的公开入口，所以这里自己做完整流程。
+                login?.url === undefined
+                  ? h(
+                      'button',
+                      {
+                        className: 'qw-quota-renew',
+                        type: 'button',
+                        onClick: onRenew,
+                        disabled: renewBusy === true,
+                      },
+                      renewBusy === true ? t('quota.renewOpening') : t('quota.renew'),
+                    )
+                  : h(
+                      'div',
+                      null,
+                      h('p', { className: 'qw-hint', style: { margin: '4px 0' } }, t('quota.renewOpened')),
+                      h(
+                        'div',
+                        { className: 'qw-quota-actions' },
+                        h(
+                          'a',
+                          { className: 'qw-btn', href: login.url, target: '_blank', rel: 'noreferrer' },
+                          t('quota.openAuth'),
+                        ),
+                        h(
+                          'button',
+                          {
+                            className: 'qw-btn qw-btn-primary',
+                            type: 'button',
+                            onClick: onComplete,
+                            disabled: renewBusy === true,
+                          },
+                          renewBusy === true ? t('common.refreshing') : t('quota.completeLogin'),
+                        ),
+                      ),
+                    ),
+                renewError === undefined
+                  ? null
+                  : h('p', { className: 'qw-err' }, `${t('quota.renewFailed')}：${renewError}`),
               )
             : null,
           row(t('plan.name'), summary?.planName ?? '—'),
@@ -2139,7 +2184,7 @@ window.__ModuleLoader__.load({
                         : reading.label,
                   ),
             ),
-            // 过期时给一个直达插件页的链接（侧栏徽标点不开页面，光变红没人知道去哪修）。
+            // 过期时给一个直达续期入口：面板一开就把授权链接领回来，省一次点击。
             reading.expired && wide !== false
               ? h(
                   'a',
@@ -2149,9 +2194,7 @@ window.__ModuleLoader__.load({
                     onClick: (event) => {
                       event.preventDefault()
                       event.stopPropagation()
-                      const link = document.querySelector('a[href="/settings/dsh-qianwen"]')
-                      if (link instanceof HTMLAnchorElement) link.click()
-                      else popover.set(true, anchorOf(rootRef.current))
+                      popover.set(true, anchorOf(rootRef.current), true)
                     },
                   },
                   t('quota.renew'),
@@ -2174,8 +2217,70 @@ window.__ModuleLoader__.load({
         const snapshot = React.useSyncExternalStore(store.subscribe, store.getSnapshot)
         const pop = React.useSyncExternalStore(popover.subscribe, popover.getSnapshot)
         const [busy, setBusy] = React.useState(false)
+        const [login, setLogin] = React.useState(undefined)
+        const [renewBusy, setRenewBusy] = React.useState(false)
+        const [renewError, setRenewError] = React.useState(undefined)
         const panelRef = React.useRef(null)
+        const renewSeen = React.useRef(0)
         const open = pop.open === true
+
+        // 续期=重新走一遍 CLI 的设备登录（与设置页里的账号卡同一套宿主路由）。
+        // 授权链接由 CLI 现生成，必须点一次才有；所以这里先取链接再开新标签页。
+        const startRenew = async () => {
+          setRenewBusy(true)
+          setRenewError(undefined)
+          try {
+            const result = await request('/login/init', { method: 'POST' })
+            if (result?.ok !== true) {
+              const message = String(result?.error?.message ?? '')
+              setRenewError(message === '' ? undefined : message)
+              return
+            }
+            // 票还在有效期内时 CLI 不给链接，只回「还有效」：刷新读数即可，不是错误。
+            if (result.alreadyAuthenticated === true) {
+              await store.refresh()
+              return
+            }
+            setLogin(result.login)
+            const url = result.login?.url
+            if (typeof url === 'string' && url !== '') {
+              // 弹窗拦截时用户还能点面板里那个真链接，这里失败不影响流程。
+              if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener')
+            } else {
+              const message = String(result.login?.message ?? '')
+              setRenewError(message === '' ? undefined : message)
+            }
+          } catch (cause) {
+            setRenewError(String(cause?.message ?? cause))
+          } finally {
+            setRenewBusy(false)
+          }
+        }
+
+        const completeLogin = async () => {
+          setRenewBusy(true)
+          setRenewError(undefined)
+          try {
+            // 宿主把 CLI 的 `--complete` 放到后台跑，这条请求立刻返回（202），
+            // 结果只能靠轮询 /summary 等登录票落地，与设置页轮询 /status 同理。
+            const result = await request('/login/complete', { method: 'POST' })
+            if (result?.ok !== true) {
+              const message = String(result?.error?.message ?? '')
+              setRenewError(message === '' ? undefined : message)
+              return
+            }
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+              await new Promise((resolve) => setTimeout(resolve, 2000))
+              await store.refresh()
+              if (store.getSnapshot()?.summary?.authenticated !== false) break
+            }
+            setLogin(undefined)
+          } catch (cause) {
+            setRenewError(String(cause?.message ?? cause))
+          } finally {
+            setRenewBusy(false)
+          }
+        }
 
         React.useEffect(() => {
           if (!open) return undefined
@@ -2194,15 +2299,29 @@ window.__ModuleLoader__.load({
           }
           document.addEventListener('pointerdown', onPointerDown, true)
           document.addEventListener('keydown', onKeyDown, true)
-          document.addEventListener('scroll', close, true)
-          window.addEventListener('resize', close)
+          // 面板是 fixed 定位，只有窗口级滚动会让锚点离开原位。这里必须用不带 capture
+          // 的监听：scroll 不冒泡，capture 会把聊天流、侧栏内部的滚动也收进来，
+          // 面板一打开就被自动滚动关掉。
+          const onScroll = () => close()
+          const onResize = () => close()
+          window.addEventListener('scroll', onScroll)
+          window.addEventListener('resize', onResize)
           return () => {
             document.removeEventListener('pointerdown', onPointerDown, true)
             document.removeEventListener('keydown', onKeyDown, true)
-            document.removeEventListener('scroll', close, true)
-            window.removeEventListener('resize', close)
+            window.removeEventListener('scroll', onScroll)
+            window.removeEventListener('resize', onResize)
           }
         }, [open])
+
+        // 侧栏那枚「去续期」直接开面板时会带一个 renewToken：消费一次就够，
+        // 之后开关面板不该再自动发起登录（token 用 ref 记账，关掉再开不重放）。
+        React.useEffect(() => {
+          if (!open) return
+          if (pop.renewToken === renewSeen.current) return
+          renewSeen.current = pop.renewToken
+          void startRenew()
+        }, [open, pop.renewToken])
 
         if (!open) return null
 
@@ -2235,6 +2354,11 @@ window.__ModuleLoader__.load({
           onClose: () => popover.set(false),
           style,
           panelRef,
+          login,
+          renewBusy,
+          renewError,
+          onRenew: startRenew,
+          onComplete: completeLogin,
         })
       }
 
